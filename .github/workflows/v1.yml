@@ -1,0 +1,127 @@
+name: GHA Composite WF Example 3 - V1
+
+run-name:  "#${{ github.run_number }}. Build and Deploy v1 on ${{ github.ref_type }} '${{ github.ref_name }}'. Triggered by: ${{ github.triggering_actor }}"
+
+on:
+  # Allow for manual execution and to trigger Secondary region deployments
+  workflow_dispatch:
+    inputs:
+      BypassCodeScan:
+        description: 'Bypass code scan?'
+        type: boolean
+        required: true
+        default: false
+        
+  # Auto trigger when pushes to selected branch naming conventions occur
+  #push: 
+    #branches: [main, feat/**, feature/**, release/**]
+    #paths-ignore: ['*.md']
+  # Auto trigger when a release is created
+  #release:
+    #types: [published]
+
+jobs:
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: Build
+        run: echo "running docker build --target=build"
+      - name: Test
+        run: echo "running docker build --target=test"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Lint Tool
+        run: echo "Setting up Lint tool"
+      - name: Lint Code
+        run: echo "Linting code"
+
+  code-scan:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.BypassCodeScan != true }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download Vericode
+        run: echo "downloading Vericode"
+      - name: Scan
+        run: echo "scanning code"
+
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    needs: [build-and-test, code-scan]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Image
+        run: echo "running docker build --target=final"
+      - name: Download Trivy
+        run: echo "downloading Trivy"
+      - name: Aqua Image Scan
+        run: echo "scanning image"
+      - name: Login to ACR
+        run: echo "logging into ACR"
+      - name: Publish Image
+        run: echo "publishing image with tag ???"
+      - name: Logout of ACR
+        run: echo "logging out of ACR"
+
+  deploy-to-dev:
+    runs-on: ubuntu-latest
+    # Logic lets Job run if Code-Scan was skipped, but only triggers if we're not deploying to a Secondary region
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    needs: [publish]
+    environment: dev
+    steps:
+      - name: Deploy to Dev
+        run: echo "deploying via helm"
+
+  deploy-to-test:
+    runs-on: ubuntu-latest 
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    needs: [publish]
+    environment: test
+    steps:
+      - name: Deploy to Test
+        run: echo "deploying via helm"
+
+  deploy-to-uat-primary:
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    runs-on: ubuntu-latest
+    needs: [deploy-to-test]
+    environment: uat primary
+    steps:
+      - name: Deploy to UAT Primary
+        run: echo "deploying via helm"
+
+  deploy-to-uat-secondary:
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    runs-on: ubuntu-latest
+    needs: [publish]
+    environment: uat secondary
+    steps:
+      - name: Deploy to UAT Secondary
+        run: echo "deploying via helm"
+
+  deploy-to-prd-primary:
+    runs-on: ubuntu-latest
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    needs: [deploy-to-uat-primary]
+    environment: prd primary
+    steps:
+      - name: Deploy to PRD Primary
+        run: echo "deploying via helm"
+        
+  deploy-to-prd-secondary:
+    runs-on: ubuntu-latest
+    if: ${{ always() && (inputs.BypassCodeScan == true || needs.code-scan.result == 'success') }}
+    needs: [publish]
+    environment: prd secondary
+    steps:
+      - name: Deploy to PRD Secondary
+        run: echo "deploying via helm"

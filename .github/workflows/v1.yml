@@ -11,6 +11,11 @@ on:
         type: boolean
         required: true
         default: false
+      Test:
+        description: 'abc'
+        type: boolean
+        required: true
+        default: false
         
   # Auto trigger when pushes to selected branch naming conventions occur
   #push: 
